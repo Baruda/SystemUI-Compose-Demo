@@ -1,8 +1,6 @@
 # SystemUI Compose Demo
 
-A complete, production-quality recreation of core Android System UI features built entirely in **Jetpack Compose**.
 
-This project was created to deeply understand Google Android System UI architecture – reactive patterns, gesture handling, state management, and modern Compose migration.
 
 ## Features
 - Reactive pull-down **notification shade** with spring physics animation
@@ -18,11 +16,16 @@ This project was created to deeply understand Google Android System UI architect
 - Accessibility support (semantics, content descriptions)
 - Unit and Compose UI tests
 
-Built with Kotlin, Coroutines, StateFlow/SharedFlow, and Compose best practices.
+## Demo
+*(Add your 60-second screen recording GIF/video here once recorded)*
+
+![Demo](demo.gif) <!-- Replace with your actual file -->
 
 ## Why This Project?
-To master platform-level Android engineering – the kind of code that ships to billions of devices.
+To master platform-level Android engineering — the kind of code that ships to billions of devices.
+
+Built with Kotlin, Coroutines, StateFlow/SharedFlow, and Compose best practices.
 
 Feel free to star ⭐ or fork!
 
-Made with ❤️ for Android System UI
+Made with ❤️ for Android System UI | Nigeria 🇳🇬
