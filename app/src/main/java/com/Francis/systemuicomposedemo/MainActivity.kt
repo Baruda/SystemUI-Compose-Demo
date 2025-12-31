@@ -4,15 +4,34 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -21,10 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -32,14 +54,102 @@ import com.Francis.systemuicomposedemo.ui.theme.SystemUIComposeDemoTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
-// --- ARCHITECTURAL SUGGESTION: STATE HOLDER / VIEWMODEL ---
-// A dedicated state holder class (like a ViewModel) is used to manage and expose UI state.
+// --- Data class for a Quick Setting Tile State ---
+data class QuickSettingTileState(
+    val name: String,
+    val icon: ImageVector,
+    var isEnabled: Boolean = false
+)
+
+// --- Data class for a Notification ---
+data class Notification(
+    val id: Int,
+    val appName: String,
+    val title: String,
+    val text: String,
+)
+
+// --- Data class for a Recent Task ---
+data class Task(
+    val id: Int,
+    val name: String,
+    val color: Color,
+)
+
+// --- ViewModel for the Notification Shade ---
+class ShadeViewModel {
+    private val _quickSettings = MutableStateFlow(
+        listOf(
+            QuickSettingTileState("Wi-Fi", Icons.Default.Wifi, isEnabled = true),
+            QuickSettingTileState("Bluetooth", Icons.Default.Bluetooth, isEnabled = false),
+            QuickSettingTileState("Flashlight", Icons.Default.FlashlightOn),
+            QuickSettingTileState("Auto-rotate", Icons.Default.AutoAwesome),
+            QuickSettingTileState("Do Not Disturb", Icons.Default.NotificationsOff),
+            QuickSettingTileState("Airplane Mode", Icons.Default.AirplanemodeActive),
+        )
+    )
+    val quickSettings = _quickSettings.asStateFlow()
+
+    private val _notifications = MutableStateFlow(
+        listOf(
+            Notification(1, "Gmail", "New Message", "Check out the new features..."),
+            Notification(2, "Slack", "Direct Message", "John Doe sent you a message"),
+            Notification(3, "Android Studio", "Build Successful", "app:assembleDebug finished."),
+        )
+    )
+    val notifications = _notifications.asStateFlow()
+
+    fun toggleQuickSetting(settingName: String) {
+        _quickSettings.value = _quickSettings.value.map {
+            if (it.name == settingName) {
+                it.copy(isEnabled = !it.isEnabled)
+            } else {
+                it
+            }
+        }
+    }
+
+    fun dismissNotification(notificationId: Int) {
+        _notifications.value = _notifications.value.filterNot { it.id == notificationId }
+    }
+}
+
+// --- ViewModel for the Recents Screen ---
+class RecentsViewModel {
+    private val _tasks = MutableStateFlow(
+        listOf(
+            Task(1, "Chrome", Color(0xFFF44336)),
+            Task(2, "Spotify", Color(0xFF4CAF50)),
+            Task(3, "Settings", Color(0xFF2196F3)),
+            Task(4, "Calculator", Color(0xFFFFC107)),
+            Task(5, "Camera", Color(0xFF9C27B0)),
+        )
+    )
+    val tasks = _tasks.asStateFlow()
+
+    fun dismissTask(taskId: Int) {
+        _tasks.value = _tasks.value.filterNot { it.id == taskId }
+    }
+}
+
+// --- ViewModel for the Volume Dialog ---
+class VolumeViewModel {
+    private val _volumeLevel = MutableStateFlow(0.5f)
+    val volumeLevel = _volumeLevel.asStateFlow()
+
+    fun setVolume(level: Float) {
+        _volumeLevel.value = level
+    }
+}
+
+
+// --- ViewModel for the Keyguard ---
 class KeyguardViewModel {
-    // State is exposed as a StateFlow, the recommended way to handle observable state.
     private val _isLocked = MutableStateFlow(true)
     val isLocked = _isLocked.asStateFlow()
-
     fun lock() { _isLocked.value = true }
     fun unlock() { _isLocked.value = false }
 }
@@ -48,12 +158,8 @@ class KeyguardViewModel {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // --- ENABLING EDGE-TO-EDGE DISPLAY ---
-        // This gives our app full control over the entire screen real estate.
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
         setContent {
             SystemUIComposeDemoTheme {
                 SystemUIComposeDemo()
@@ -67,7 +173,15 @@ class MainActivity : ComponentActivity() {
 fun SystemUIComposeDemo() {
     // Centralized state management.
     val keyguardVM = remember { KeyguardViewModel() }
+    val shadeVM = remember { ShadeViewModel() }
+    val recentsVM = remember { RecentsViewModel() }
+    val volumeVM = remember { VolumeViewModel() }
     val isLocked by keyguardVM.isLocked.collectAsState()
+    val quickSettings by shadeVM.quickSettings.collectAsState()
+    val notifications by shadeVM.notifications.collectAsState()
+    val tasks by recentsVM.tasks.collectAsState()
+    val volumeLevel by volumeVM.volumeLevel.collectAsState()
+
 
     // Transient UI state for gestures and animations.
     var expansion by remember { mutableFloatStateOf(0f) }
@@ -128,15 +242,27 @@ fun SystemUIComposeDemo() {
             StatusBar()
 
             // Layer 2: Notification Shade Panel (slides down from the top)
-            ShadePanel(expansion = animatedExpansion, maxHeight = maxHeight)
+            ShadePanel(
+                expansion = animatedExpansion,
+                maxHeight = maxHeight,
+                quickSettings = quickSettings,
+                notifications = notifications,
+                onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
+                onDismissNotification = { shadeVM.dismissNotification(it) }
+            )
 
             // Layer 3: Heads-Up Notification (transient, appears over other content)
             headsUp?.let { HeadsUpNotification(it) }
 
             // Layer 4: System Dialogs & Overlays
-            if (showVolume) VolumeDialog { showVolume = false }
+            if (showVolume) VolumeDialog(volumeLevel, { volumeVM.setVolume(it) }) { showVolume = false }
             if (showPower) PowerMenu { showPower = false }
-            if (showRecents) RecentsScreen(onDismiss = { showRecents = false }, onSplit = { showSplit = true })
+            if (showRecents) RecentsScreen(
+                tasks = tasks,
+                onDismissTask = { recentsVM.dismissTask(it) },
+                onDismiss = { showRecents = false },
+                onSplit = { showSplit = true }
+            )
             if (showSplit) SplitScreenOverlay { showSplit = false }
 
             // Layer 5: Navigation Bar (always at the bottom)
@@ -205,18 +331,218 @@ fun KeyguardScreen(onUnlock: () -> Unit, onBiometric: () -> Unit) {
 }
 
 @Composable
-fun ShadePanel(expansion: Float, maxHeight: Dp) {
+fun ShadePanel(
+    expansion: Float,
+    maxHeight: Dp,
+    quickSettings: List<QuickSettingTileState>,
+    notifications: List<Notification>,
+    onToggleQuickSetting: (String) -> Unit,
+    onDismissNotification: (Int) -> Unit
+) {
     if (expansion > 0f) { // Performance optimization.
-        Box(
+        Column(
             Modifier
                 .fillMaxWidth()
                 .height(maxHeight * expansion) // Height is dynamically controlled by the gesture.
                 .background(Color.DarkGray.copy(alpha = 0.9f))
         ) {
-            Text("Notification Shade", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            // Animate the content to fade/slide in
+            AnimatedVisibility(
+                visible = expansion > 0.5, // Only show when expanded enough
+                enter = fadeIn(animationSpec = spring(stiffness = 300f)) + slideInVertically(animationSpec = spring(stiffness = 300f)),
+                exit = fadeOut(animationSpec = spring(stiffness = 300f)) + slideOutVertically(animationSpec = spring(stiffness = 300f))
+            ) {
+                Column(modifier = Modifier.padding(top = 40.dp)) { // Padding for status bar
+                    QuickSettingsGrid(quickSettings, onToggle = onToggleQuickSetting)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Notifications",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NotificationList(notifications, onDismissNotification)
+                }
+            }
         }
     }
 }
+
+@Composable
+fun QuickSettingsGrid(
+    settings: List<QuickSettingTileState>,
+    onToggle: (String) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        contentPadding = PaddingValues(horizontal = 12.dp)
+    ) {
+        items(settings) { setting ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .padding(4.dp)
+                    .clickable { onToggle(setting.name) }
+                    .padding(vertical = 12.dp)
+            ) {
+                Icon(
+                    imageVector = setting.icon,
+                    contentDescription = setting.name,
+                    tint = if (setting.isEnabled) MaterialTheme.colorScheme.primary else Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(setting.name, color = Color.White, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun NotificationList(
+    notifications: List<Notification>,
+    onDismissNotification: (Int) -> Unit
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = 100.dp) // Avoid overlap with nav bar
+    ) {
+        items(notifications, key = { it.id }) { notification ->
+            NotificationCard(notification, onDismiss = { onDismissNotification(notification.id) })
+        }
+    }
+}
+
+@Composable
+fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    // A simple swipe-to-dismiss implementation
+    Box(
+        Modifier
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount
+                    },
+                    onDragEnd = {
+                        if (abs(offsetX) > 300) { // arbitrary threshold
+                            onDismiss()
+                        }
+                        // Animate back to 0f if not dismissed
+                        offsetX = 0f
+                    }
+                )
+            }
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp, horizontal = 16.dp),
+            shape = MaterialTheme.shapes.medium,
+            color = Color.Gray.copy(alpha = 0.4f)
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Apps, contentDescription = "App Icon", tint = Color.White) // Placeholder icon
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(notification.appName, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(notification.title, color = Color.White, fontWeight = FontWeight.Medium)
+                    Text(notification.text, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentsScreen(
+    tasks: List<Task>,
+    onDismissTask: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onSplit: () -> Unit // Not used yet
+) {
+    val lazyListState = rememberLazyListState()
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = lazyListState)
+
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f))) {
+        LazyRow(
+            modifier = Modifier.fillMaxSize(),
+            state = lazyListState,
+            flingBehavior = flingBehavior,
+            contentPadding = PaddingValues(horizontal = 40.dp), // To have cards centered
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(tasks, key = { it.id }) { task ->
+                TaskCard(
+                    task = task,
+                    onDismiss = { onDismissTask(task.id) },
+                    modifier = Modifier
+                        .fillParentMaxHeight(0.7f) // Make cards tall
+                        .aspectRatio(9f / 16f) // Typical phone aspect ratio
+                )
+            }
+        }
+        Button(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(32.dp)
+                .navigationBarsPadding()
+        ) {
+            Text("Close")
+        }
+    }
+}
+
+@Composable
+fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectVerticalDragGestures { change, dragAmount ->
+                    // Swipe up to dismiss
+                    if (dragAmount < -150) { // Swipe threshold
+                        onDismiss()
+                    }
+                    change.consume()
+                }
+            },
+        shape = MaterialTheme.shapes.large,
+        color = task.color
+    ) {
+        Column {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = 0.2f))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Android, contentDescription = "App Icon", tint = Color.White) // Placeholder
+                Spacer(Modifier.width(8.dp))
+                Text(task.name, color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            // Fake app content
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Fake App Content", color = Color.White, fontSize = 20.sp)
+            }
+        }
+    }
+}
+
+
 
 @Composable
 fun NavigationBar(
@@ -235,7 +561,6 @@ fun NavigationBar(
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            // Added buttons for demoing volume and power menus
             Button(onClick = onShowVolume) { Text("Vol") }
             Button(onClick = onBack) { Text("Back") }
             Button(onClick = onHome) { Text("Home") }
@@ -249,7 +574,6 @@ fun NavigationBar(
 
 @Composable
 fun HeadsUpNotification(text: String) {
-    // Positioned at the top using a Box wrapper
     Box(modifier = Modifier.fillMaxWidth().statusBarsPadding(), contentAlignment = Alignment.TopCenter) {
         Box(
             modifier = Modifier
@@ -262,13 +586,35 @@ fun HeadsUpNotification(text: String) {
 }
 
 @Composable
-fun VolumeDialog(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Volume") },
-        text = { Text("Volume controls would appear here.") },
-        confirmButton = { Button(onClick = onDismiss) { Text("OK") } }
-    )
+fun VolumeDialog(volumeLevel: Float, onVolumeChange: (Float) -> Unit, onDismiss: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable { onDismiss() }, // Dismiss on background click
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Surface(
+            modifier = Modifier
+                .padding(end = 24.dp)
+                .height(300.dp)
+                .width(100.dp),
+            shape = MaterialTheme.shapes.large,
+            color = Color(0xFF333333)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Slider(
+                    value = volumeLevel,
+                    onValueChange = onVolumeChange,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            rotationZ = -90f
+                        }
+                        .width(250.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -281,16 +627,6 @@ fun PowerMenu(onDismiss: () -> Unit) {
     )
 }
 
-@Composable
-fun RecentsScreen(onDismiss: () -> Unit, onSplit: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray)) {
-        Text("Recents Screen", color = Color.White, modifier = Modifier.align(Alignment.Center))
-        // Added button to dismiss for now
-        Button(onClick = onDismiss, modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)) {
-            Text("Close")
-        }
-    }
-}
 
 @Composable
 fun SplitScreenOverlay(onDismiss: () -> Unit) {
@@ -304,7 +640,7 @@ fun SplitScreenOverlay(onDismiss: () -> Unit) {
 
 // --- PREVIEWS ---
 
-@Preview(showBackground = true, showSystemUi = true, name = "Locked State")
+@Preview(showSystemUi = true, name = "Locked State")
 @Composable
 fun LockedPreview() {
     SystemUIComposeDemoTheme {
@@ -312,7 +648,7 @@ fun LockedPreview() {
     }
 }
 
-@Preview(showBackground = true, showSystemUi = true, name = "Unlocked State")
+@Preview(showSystemUi = true, name = "Unlocked State")
 @Composable
 fun UnlockedPreview() {
     SystemUIComposeDemoTheme {
@@ -324,3 +660,45 @@ fun UnlockedPreview() {
     }
 }
 
+@Preview(showBackground = true, name = "Shade Panel Preview", heightDp = 800)
+@Composable
+fun ShadePanelPreview() {
+    val shadeVM = remember { ShadeViewModel() }
+    val quickSettings by shadeVM.quickSettings.collectAsState()
+    val notifications by shadeVM.notifications.collectAsState()
+    SystemUIComposeDemoTheme {
+        Box(modifier = Modifier.background(Color.Black)) {
+            ShadePanel(
+                expansion = 1f,
+                maxHeight = 800.dp,
+                quickSettings = quickSettings,
+                notifications = notifications,
+                onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
+                onDismissNotification = { shadeVM.dismissNotification(it) }
+            )
+        }
+    }
+}
+
+@Preview(showSystemUi = true, name = "Recents Screen Preview")
+@Composable
+fun RecentsScreenPreview() {
+    val recentsVM = remember { RecentsViewModel() }
+    val tasks by recentsVM.tasks.collectAsState()
+    SystemUIComposeDemoTheme {
+        RecentsScreen(
+            tasks = tasks,
+            onDismissTask = {},
+            onDismiss = {},
+            onSplit = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Volume Dialog Preview")
+@Composable
+fun VolumeDialogPreview() {
+    SystemUIComposeDemoTheme {
+        VolumeDialog(volumeLevel = 0.5f, onVolumeChange = {}, onDismiss = {})
+    }
+}
