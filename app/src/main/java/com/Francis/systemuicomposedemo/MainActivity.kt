@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -199,7 +200,8 @@ fun SystemUIComposeDemo() {
     var showVolume by remember { mutableStateOf(false) }
     var showPower by remember { mutableStateOf(false) }
     var showRecents by remember { mutableStateOf(false) }
-    var showSplit by remember { mutableStateOf(false) }
+    var splitScreenTask by remember { mutableStateOf<Task?>(null) }
+    val showSplit = splitScreenTask != null
     var headsUp by remember { mutableStateOf<String?>(null) }
 
     // A side-effect to manage the lifecycle of a heads-up notification.
@@ -265,8 +267,12 @@ fun SystemUIComposeDemo() {
                 tasks = tasks,
                 onDismissTask = { recentsVM.dismissTask(it) },
                 onDismiss = { showRecents = false },
+                onSplit = { task ->
+                    splitScreenTask = task
+                    showRecents = false
+                }
             )
-            if (showSplit) SplitScreenOverlay { showSplit = false }
+            if (showSplit) SplitScreenOverlay(splitScreenTask) { splitScreenTask = null }
 
             // Layer 5: Navigation Bar (always at the bottom)
             NavigationBar(
@@ -472,6 +478,7 @@ fun RecentsScreen(
     tasks: List<Task>,
     onDismissTask: (Int) -> Unit,
     onDismiss: () -> Unit,
+    onSplit: (Task) -> Unit
 ) {
     val lazyListState = rememberLazyListState()
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = lazyListState)
@@ -489,6 +496,7 @@ fun RecentsScreen(
                 TaskCard(
                     task = task,
                     onDismiss = { onDismissTask(task.id) },
+                    onSplit = { onSplit(task) },
                     modifier = Modifier
                         .fillParentMaxHeight(0.7f) // Make cards tall
                         .aspectRatio(9f / 16f) // Typical phone aspect ratio
@@ -508,7 +516,7 @@ fun RecentsScreen(
 }
 
 @Composable
-fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: Modifier = Modifier) {
     val offsetY = remember { Animatable(0f) }
 
     Surface(
@@ -538,12 +546,16 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White.copy(alpha = 0.2f))
-                    .padding(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White)
                 Spacer(Modifier.width(8.dp))
                 Text(task.name, color = Color.White, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onSplit) {
+                    Icon(Icons.Default.VerticalSplit, contentDescription = "Split Screen", tint = Color.White)
+                }
             }
             // Fake app content
             Box(
@@ -660,11 +672,20 @@ fun PowerMenu(onDismiss: () -> Unit) {
 
 
 @Composable
-fun SplitScreenOverlay(onDismiss: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f))) {
-        Text("Split Screen", color = Color.White, modifier = Modifier.align(Alignment.Center))
-        Button(onClick = onDismiss, modifier = Modifier.align(Alignment.BottomCenter).padding(32.dp)) {
-            Text("Exit Split")
+fun SplitScreenOverlay(task: Task?, onDismiss: () -> Unit) {
+    if (task == null) return
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f))) {
+        // Top app
+        Box(modifier = Modifier.weight(1f)) {
+            TaskCard(task = task, onDismiss = {}, onSplit = {}, modifier = Modifier.fillMaxSize())
+        }
+        // Bottom app (placeholder)
+        Box(modifier = Modifier.weight(1f).background(Color.DarkGray)) {
+            Text("Select another app", color = Color.White, modifier = Modifier.align(Alignment.Center))
+        }
+        Button(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp)) {
+            Text("Exit Split Screen")
         }
     }
 }
@@ -721,6 +742,7 @@ fun RecentsScreenPreview() {
             tasks = tasks,
             onDismissTask = {},
             onDismiss = {},
+            onSplit = {}
         )
     }
 }
@@ -738,5 +760,14 @@ fun VolumeDialogPreview() {
 fun PowerMenuPreview() {
     SystemUIComposeDemoTheme {
         PowerMenu(onDismiss = {})
+    }
+}
+
+@Preview(showBackground = true, name = "Split Screen Preview")
+@Composable
+fun SplitScreenPreview() {
+    val task = Task(1, "Chrome", Color(0xFFF44336))
+    SystemUIComposeDemoTheme {
+        SplitScreenOverlay(task = task, onDismiss = {})
     }
 }
