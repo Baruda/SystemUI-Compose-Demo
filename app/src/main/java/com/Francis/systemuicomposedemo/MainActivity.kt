@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -52,9 +53,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import com.Francis.systemuicomposedemo.ui.theme.SystemUIComposeDemoTheme
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -414,26 +417,32 @@ fun NotificationList(
 
 @Composable
 fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    // A simple swipe-to-dismiss implementation
+    val offsetX = remember { Animatable(0f) }
+
     Box(
         Modifier
             .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        offsetX += dragAmount
-                    },
-                    onDragEnd = {
-                        if (abs(offsetX) > 300) { // arbitrary threshold
-                            onDismiss()
+                coroutineScope {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            launch {
+                                offsetX.snapTo(offsetX.value + dragAmount)
+                            }
+                        },
+                        onDragEnd = {
+                            launch {
+                                if (abs(offsetX.value) > 300) { // arbitrary threshold
+                                    onDismiss()
+                                } else {
+                                    offsetX.animateTo(0f, spring())
+                                }
+                            }
                         }
-                        // Animate back to 0f if not dismissed
-                        offsetX = 0f
-                    }
-                )
+                    )
+                }
             }
-            .offset { IntOffset(offsetX.roundToInt(), 0) }
+            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
     ) {
         Surface(
             modifier = Modifier
@@ -446,7 +455,7 @@ fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Notifications, contentDescription = "App Icon", tint = Color.White) // Placeholder icon
+                Icon(Icons.Default.Notifications, contentDescription = "App Icon", tint = Color.White)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(notification.appName, color = Color.White, fontWeight = FontWeight.Bold)
@@ -500,15 +509,24 @@ fun RecentsScreen(
 
 @Composable
 fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val offsetY = remember { Animatable(0f) }
+
     Surface(
         modifier = modifier
+            .offset { IntOffset(0, offsetY.value.roundToInt()) }
             .pointerInput(Unit) {
-                detectVerticalDragGestures { change, dragAmount ->
-                    // Swipe up to dismiss
-                    if (dragAmount < -150) { // Swipe threshold
-                        onDismiss()
+                coroutineScope {
+                    detectVerticalDragGestures {
+                        change, dragAmount ->
+                        change.consume()
+                        launch {
+                            offsetY.snapTo(offsetY.value + dragAmount)
+                        }
+                        // Swipe up to dismiss
+                        if (dragAmount < -150) { // Swipe threshold
+                            onDismiss()
+                        }
                     }
-                    change.consume()
                 }
             },
         shape = MaterialTheme.shapes.large,
@@ -523,7 +541,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White) // Placeholder
+                Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White)
                 Spacer(Modifier.width(8.dp))
                 Text(task.name, color = Color.White, fontWeight = FontWeight.Bold)
             }
