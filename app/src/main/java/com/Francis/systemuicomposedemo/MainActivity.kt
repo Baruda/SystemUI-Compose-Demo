@@ -216,80 +216,77 @@ fun SystemUIComposeDemo() {
     BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         val maxHeight = this.maxHeight
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isLocked) {
+                    if (!isLocked) {
+                        // When unlocked, downward drag expands the notification shade.
+                        detectVerticalDragGestures { _, dragAmount ->
+                            val delta = dragAmount / maxHeight.value
+                            expansion = (expansion - delta).coerceIn(0f, 1f)
+                        }
+                    } else {
+                        // When locked, a significant swipe up unlocks the device.
+                        detectVerticalDragGestures { _, dragAmount ->
+                            if (dragAmount < -200) { // Threshold to prevent accidental unlocks.
+                                keyguardVM.unlock()
+                            }
+                        }
+                    }
+                }
+        ) {
+            // --- UI LAYERS (drawn from back to front) ---
+
             // Layer 0: Home Screen Content (conditionally rendered)
             if (!isLocked) {
                 HomeScreenContent(onTriggerHeadsUp = { headsUp = "New Message from Jane!" })
             }
 
-            // Centralized Gesture Input dispatcher.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(isLocked) {
-                        if (!isLocked) {
-                            // When unlocked, downward drag expands the notification shade.
-                            detectVerticalDragGestures { _, dragAmount ->
-                                val delta = dragAmount / maxHeight.value
-                                expansion = (expansion - delta).coerceIn(0f, 1f)
-                            }
-                        } else {
-                            // When locked, a significant swipe up unlocks the device.
-                            detectVerticalDragGestures { _, dragAmount ->
-                                if (dragAmount < -200) { // Threshold to prevent accidental unlocks.
-                                    keyguardVM.unlock()
-                                }
-                            }
-                        }
-                    }
-            ) {
-                // --- UI LAYERS (drawn from back to front) ---
+            // Layer 1: Status Bar (always visible)
+            StatusBar()
 
-                // Layer 1: Status Bar (always visible)
-                StatusBar()
+            // Layer 2: Notification Shade Panel (slides down from the top)
+            ShadePanel(
+                expansion = animatedExpansion,
+                maxHeight = maxHeight,
+                quickSettings = quickSettings,
+                notifications = notifications,
+                onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
+                onDismissNotification = { shadeVM.dismissNotification(it) }
+            )
 
-                // Layer 2: Notification Shade Panel (slides down from the top)
-                ShadePanel(
-                    expansion = animatedExpansion,
-                    maxHeight = maxHeight,
-                    quickSettings = quickSettings,
-                    notifications = notifications,
-                    onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
-                    onDismissNotification = { shadeVM.dismissNotification(it) }
-                )
+            // Layer 3: Heads-Up Notification (transient, appears over other content)
+            headsUp?.let { HeadsUpNotification(it) }
 
-                // Layer 3: Heads-Up Notification (transient, appears over other content)
-                headsUp?.let { HeadsUpNotification(it) }
-
-                // Layer 4: System Dialogs & Overlays
-                if (showVolume) VolumeDialog(volumeLevel, { volumeVM.setVolume(it) }) { showVolume = false }
-                if (showPower) PowerMenu { showPower = false }
-                if (showRecents) RecentsScreen(
-                    tasks = tasks,
-                    onDismissTask = { recentsVM.dismissTask(it) },
-                    onDismiss = { showRecents = false },
-                    onSplit = { task ->
-                        splitScreenTask = task
-                        showRecents = false
-                    }
-                )
-                if (showSplit) SplitScreenOverlay(splitScreenTask) { splitScreenTask = null }
-
-                // Layer 5: Navigation Bar (always at the bottom)
-                NavigationBar(
-                    onBack = { if (expansion > 0f) expansion = 0f }, // Back gesture closes shade first.
-                    onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
-                    onRecents = { showRecents = true },
-                    onShowPower = { showPower = true },
-                    onShowVolume = { showVolume = true }
-                )
-
-                // Layer 6: Keyguard (Lock Screen) - drawn on top of everything.
-                if (isLocked) {
-                    KeyguardScreen(
-                        onBiometric = { keyguardVM.unlock() } // Simulate successful biometric unlock.
-                    )
+            // Layer 4: System Dialogs & Overlays
+            if (showVolume) VolumeDialog(volumeLevel, { volumeVM.setVolume(it) }) { showVolume = false }
+            if (showPower) PowerMenu { showPower = false }
+            if (showRecents) RecentsScreen(
+                tasks = tasks,
+                onDismissTask = { recentsVM.dismissTask(it) },
+                onDismiss = { showRecents = false },
+                onSplit = { task ->
+                    splitScreenTask = task
+                    showRecents = false
                 }
+            )
+            if (showSplit) SplitScreenOverlay(splitScreenTask) { splitScreenTask = null }
+
+            // Layer 5: Navigation Bar (always at the bottom)
+            NavigationBar(
+                onBack = { if (expansion > 0f) expansion = 0f }, // Back gesture closes shade first.
+                onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
+                onRecents = { showRecents = true },
+                onShowPower = { showPower = true },
+                onShowVolume = { showVolume = true }
+            )
+
+            // Layer 6: Keyguard (Lock Screen) - drawn on top of everything.
+            if (isLocked) {
+                KeyguardScreen(
+                    onBiometric = { keyguardVM.unlock() } // Simulate successful biometric unlock.
+                )
             }
         }
     }
@@ -402,7 +399,7 @@ fun QuickSettingsGrid(
                     tint = if (setting.isEnabled) MaterialTheme.colorScheme.primary else Color.White,
                     modifier = Modifier.size(24.dp)
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(setting.name, color = Color.White, fontSize = 12.sp)
             }
         }
