@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -261,7 +262,6 @@ fun SystemUIComposeDemo() {
                 tasks = tasks,
                 onDismissTask = { recentsVM.dismissTask(it) },
                 onDismiss = { showRecents = false },
-                onSplit = { showSplit = true }
             )
             if (showSplit) SplitScreenOverlay { showSplit = false }
 
@@ -277,7 +277,6 @@ fun SystemUIComposeDemo() {
             // Layer 6: Keyguard (Lock Screen) - drawn on top of everything.
             if (isLocked) {
                 KeyguardScreen(
-                    onUnlock = { keyguardVM.unlock() },
                     onBiometric = { keyguardVM.unlock() } // Simulate successful biometric unlock.
                 )
             }
@@ -317,7 +316,7 @@ fun StatusBar() {
 }
 
 @Composable
-fun KeyguardScreen(onUnlock: () -> Unit, onBiometric: () -> Unit) {
+fun KeyguardScreen(onBiometric: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Black.copy(alpha = 0.8f)) {
         Box(contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -447,7 +446,7 @@ fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
                 modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Apps, contentDescription = "App Icon", tint = Color.White) // Placeholder icon
+                Icon(Icons.Default.Notifications, contentDescription = "App Icon", tint = Color.White) // Placeholder icon
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(notification.appName, color = Color.White, fontWeight = FontWeight.Bold)
@@ -464,7 +463,6 @@ fun RecentsScreen(
     tasks: List<Task>,
     onDismissTask: (Int) -> Unit,
     onDismiss: () -> Unit,
-    onSplit: () -> Unit // Not used yet
 ) {
     val lazyListState = rememberLazyListState()
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = lazyListState)
@@ -525,7 +523,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Android, contentDescription = "App Icon", tint = Color.White) // Placeholder
+                Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White) // Placeholder
                 Spacer(Modifier.width(8.dp))
                 Text(task.name, color = Color.White, fontWeight = FontWeight.Bold)
             }
@@ -619,12 +617,27 @@ fun VolumeDialog(volumeLevel: Float, onVolumeChange: (Float) -> Unit, onDismiss:
 
 @Composable
 fun PowerMenu(onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Power Menu") },
-        text = { Text("Power Off / Restart options would appear here.") },
-        confirmButton = { Button(onClick = onDismiss) { Text("Cancel") } }
-    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.8f))
+            .clickable { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Button(onClick = { /* TODO: Implement Power Off */ }) {
+                Text("Power Off", fontSize = 18.sp)
+            }
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = { /* TODO: Implement Restart */ }) {
+                Text("Restart", fontSize = 18.sp)
+            }
+            Spacer(Modifier.height(48.dp))
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", fontSize = 16.sp)
+            }
+        }
+    }
 }
 
 
@@ -644,7 +657,7 @@ fun SplitScreenOverlay(onDismiss: () -> Unit) {
 @Composable
 fun LockedPreview() {
     SystemUIComposeDemoTheme {
-        KeyguardScreen(onUnlock = {}, onBiometric = {})
+        KeyguardScreen(onBiometric = {})
     }
 }
 
@@ -690,7 +703,6 @@ fun RecentsScreenPreview() {
             tasks = tasks,
             onDismissTask = {},
             onDismiss = {},
-            onSplit = {}
         )
     }
 }
@@ -700,5 +712,13 @@ fun RecentsScreenPreview() {
 fun VolumeDialogPreview() {
     SystemUIComposeDemoTheme {
         VolumeDialog(volumeLevel = 0.5f, onVolumeChange = {}, onDismiss = {})
+    }
+}
+
+@Preview(showBackground = true, name = "Power Menu Preview")
+@Composable
+fun PowerMenuPreview() {
+    SystemUIComposeDemoTheme {
+        PowerMenu(onDismiss = {})
     }
 }
