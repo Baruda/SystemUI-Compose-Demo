@@ -333,7 +333,7 @@ fun SystemUIComposeDemo() {
 
         // Layer 5: Navigation Bar (always at the bottom)
         NavigationBar(
-            onBack = { /* Back press logic would be handled here */ },
+            onBack = { expansion = 0f }, // Close the shade if it's open
             onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
             onRecents = { showRecents = true },
             onShowPower = { showPower = true },
