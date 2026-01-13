@@ -294,116 +294,58 @@ fun SystemUIComposeDemo() {
                 }
             }
     ) {
-        // The UI layers are extracted into a private function to keep this one clean.
-        SystemUiLayers(
-            isLocked = isLocked,
-            expansion = expansion,
-            animatedExpansion = animatedExpansion,
+        // The UI layers are drawn here, from back to front.
+
+        // Layer 0: Home Screen Content (conditionally rendered)
+        if (!isLocked) {
+            HomeScreenContent(onTriggerHeadsUp = { headsUp = "New Message from Jane!" })
+        }
+
+        // Layer 1: Status Bar (always visible)
+        StatusBar()
+
+        // Layer 2: Notification Shade Panel (slides down from the top)
+        ShadePanel(
+            expansion = animatedExpansion,
             maxHeight = this.maxHeight,
             quickSettings = quickSettings,
             notifications = notifications,
+            onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
+            onDismissNotification = { shadeVM.dismissNotification(it) }
+        )
+
+        // Layer 3: Heads-Up Notification (transient, appears over other content)
+        headsUp?.let { HeadsUpNotification(it) }
+
+        // Layer 4: System Dialogs & Overlays
+        if (showVolume) VolumeDialog(volumeLevel, { volumeVM.setVolume(it) }) { showVolume = false }
+        if (showPower) PowerMenu { showPower = false }
+        if (showRecents) RecentsScreen(
             tasks = tasks,
-            volumeLevel = volumeLevel,
-            showVolume = showVolume,
-            showPower = showPower,
-            showRecents = showRecents,
-            showSplit = showSplit,
-            splitScreenTask = splitScreenTask,
-            headsUp = headsUp,
-            keyguardVM = keyguardVM,
-            shadeVM = shadeVM,
-            recentsVM = recentsVM,
-            volumeVM = volumeVM,
-            onShowVolumeChange = { showVolume = it },
-            onShowPowerChange = { showPower = it },
-            onShowRecentsChange = { showRecents = it },
-            onSplitScreenTaskChange = { splitScreenTask = it },
-            onHeadsUpChange = { headsUp = it }
+            onDismissTask = { recentsVM.dismissTask(it) },
+            onDismiss = { showRecents = false },
+            onSplit = { task ->
+                splitScreenTask = task
+                showRecents = false
+            }
         )
-    }
-}
+        if (showSplit) SplitScreenOverlay(splitScreenTask) { splitScreenTask = null }
 
-/**
- * A private composable that holds all the individual UI layers.
- * This helps to keep the main [SystemUIComposeDemo] function clean and focused on state management.
- */
-@Composable
-private fun SystemUiLayers(
-    isLocked: Boolean,
-    expansion: Float,
-    animatedExpansion: Float,
-    maxHeight: Dp,
-    quickSettings: List<QuickSettingTileState>,
-    notifications: List<Notification>,
-    tasks: List<Task>,
-    volumeLevel: Float,
-    showVolume: Boolean,
-    showPower: Boolean,
-    showRecents: Boolean,
-    showSplit: Boolean,
-    splitScreenTask: Task?,
-    headsUp: String?,
-    keyguardVM: KeyguardViewModel,
-    shadeVM: ShadeViewModel,
-    recentsVM: RecentsViewModel,
-    volumeVM: VolumeViewModel,
-    onShowVolumeChange: (Boolean) -> Unit,
-    onShowPowerChange: (Boolean) -> Unit,
-    onShowRecentsChange: (Boolean) -> Unit,
-    onSplitScreenTaskChange: (Task?) -> Unit,
-    onHeadsUpChange: (String?) -> Unit
-) {
-    // --- UI LAYERS (drawn from back to front) ---
+        // Layer 5: Navigation Bar (always at the bottom)
+        NavigationBar(
+            onBack = { /* Back press logic would be handled here */ },
+            onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
+            onRecents = { showRecents = true },
+            onShowPower = { showPower = true },
+            onShowVolume = { showVolume = true }
+        )
 
-    // Layer 0: Home Screen Content (conditionally rendered)
-    if (!isLocked) {
-        HomeScreenContent(onTriggerHeadsUp = { onHeadsUpChange("New Message from Jane!") })
-    }
-
-    // Layer 1: Status Bar (always visible)
-    StatusBar()
-
-    // Layer 2: Notification Shade Panel (slides down from the top)
-    ShadePanel(
-        expansion = animatedExpansion,
-        maxHeight = maxHeight,
-        quickSettings = quickSettings,
-        notifications = notifications,
-        onToggleQuickSetting = { shadeVM.toggleQuickSetting(it) },
-        onDismissNotification = { shadeVM.dismissNotification(it) }
-    )
-
-    // Layer 3: Heads-Up Notification (transient, appears over other content)
-    headsUp?.let { HeadsUpNotification(it) }
-
-    // Layer 4: System Dialogs & Overlays
-    if (showVolume) VolumeDialog(volumeLevel, { volumeVM.setVolume(it) }) { onShowVolumeChange(false) }
-    if (showPower) PowerMenu { onShowPowerChange(false) }
-    if (showRecents) RecentsScreen(
-        tasks = tasks,
-        onDismissTask = { recentsVM.dismissTask(it) },
-        onDismiss = { onShowRecentsChange(false) },
-        onSplit = { task ->
-            onSplitScreenTaskChange(task)
-            onShowRecentsChange(false)
+        // Layer 6: Keyguard (Lock Screen) - drawn on top of everything.
+        if (isLocked) {
+            KeyguardScreen(
+                onBiometric = { keyguardVM.unlock() } // Simulate successful biometric unlock.
+            )
         }
-    )
-    if (showSplit) SplitScreenOverlay(splitScreenTask) { onSplitScreenTaskChange(null) }
-
-    // Layer 5: Navigation Bar (always at the bottom)
-    NavigationBar(
-        onBack = { /* Back press logic is handled in the root composable for now */ },
-        onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
-        onRecents = { onShowRecentsChange(true) },
-        onShowPower = { onShowPowerChange(true) },
-        onShowVolume = { onShowVolumeChange(true) }
-    )
-
-    // Layer 6: Keyguard (Lock Screen) - drawn on top of everything.
-    if (isLocked) {
-        KeyguardScreen(
-            onBiometric = { keyguardVM.unlock() } // Simulate successful biometric unlock.
-        )
     }
 }
 
