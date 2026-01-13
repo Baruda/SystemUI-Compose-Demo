@@ -333,7 +333,17 @@ fun SystemUIComposeDemo() {
 
         // Layer 5: Navigation Bar (always at the bottom)
         NavigationBar(
-            onBack = { expansion = 0f }, // Close the shade if it's open
+            onBack = {
+                // A more robust back handler
+                if (showRecents || showSplit || showPower || showVolume) {
+                    showRecents = false
+                    showSplit = false
+                    showPower = false
+                    showVolume = false
+                } else if (expansion > 0f) {
+                    expansion = 0f
+                }
+            },
             onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
             onRecents = { showRecents = true },
             onShowPower = { showPower = true },

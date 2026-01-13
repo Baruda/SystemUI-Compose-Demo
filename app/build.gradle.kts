@@ -51,7 +51,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.material:material")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3") // Added this line
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") // Correct dependency for Android
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
