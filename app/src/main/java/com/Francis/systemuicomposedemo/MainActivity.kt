@@ -757,14 +757,14 @@ fun PowerMenu(onDismiss: () -> Unit) {
                     )
                 }
             ) {
-                Button(onClick = { /* TODO: Implement Power Off */ }) {
+                Button(onClick = { onDismiss() }) {
                     Text("Power Off", fontSize = 18.sp)
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            Button(onClick = { /* TODO: Implement Restart */ }) {
+            Button(onClick = { onDismiss() }) {
                 Text("Restart", fontSize = 18.sp)
             }
 
@@ -772,7 +772,7 @@ fun PowerMenu(onDismiss: () -> Unit) {
 
             // This hidden option is revealed on long-press.
             AnimatedVisibility(visible = showSafeMode) {
-                Button(onClick = { /* TODO: Implement Safe Mode Reboot */ }) {
+                Button(onClick = { onDismiss() }) {
                     Text("Reboot to Safe Mode", fontSize = 18.sp)
                 }
             }
