@@ -337,7 +337,7 @@ fun SystemUIComposeDemo() {
                 // A more robust back handler
                 if (showRecents || showSplit || showPower || showVolume) {
                     showRecents = false
-                    showSplit = false
+                    splitScreenTask = null
                     showPower = false
                     showVolume = false
                 } else if (expansion > 0f) {
