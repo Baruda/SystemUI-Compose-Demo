@@ -63,14 +63,27 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-// --- Data class for a Quick Setting Tile State ---
+/**
+ * Represents the state of a single Quick Settings tile.
+ *
+ * @param name The user-visible name of the tile (e.g., "Wi-Fi").
+ * @param icon The vector icon to display for the tile.
+ * @param isEnabled Whether the tile is currently in an 'on' or 'off' state.
+ */
 data class QuickSettingTileState(
     val name: String,
     val icon: ImageVector,
     var isEnabled: Boolean = false
 )
 
-// --- Data class for a Notification ---
+/**
+ * Represents a single notification item.
+ *
+ * @param id A unique identifier for the notification.
+ * @param appName The name of the app that sent the notification.
+ * @param title The title of the notification.
+ * @param text The body text of the notification.
+ */
 data class Notification(
     val id: Int,
     val appName: String,
@@ -78,15 +91,28 @@ data class Notification(
     val text: String,
 )
 
-// --- Data class for a Recent Task ---
+/**
+ * Represents a single task (application) in the Recents screen.
+ *
+ * @param id A unique identifier for the task.
+ * @param name The name of the application.
+ * @param color A representative color for the app's theme, used for the card background.
+ */
 data class Task(
     val id: Int,
     val name: String,
     val color: Color,
 )
 
-// --- ViewModel for the Notification Shade ---
+/**
+ * A state-holder (ViewModel) for the Notification Shade.
+ *
+ * This class holds the state for the Quick Settings tiles and the list of notifications.
+ * It follows the Unidirectional Data Flow (UDF) pattern by exposing its state via a read-only
+ * [StateFlow] and providing public functions to modify the state in response to UI events.
+ */
 class ShadeViewModel {
+    // Private mutable state for the Quick Settings tiles.
     private val _quickSettings = MutableStateFlow(
         listOf(
             QuickSettingTileState("Wi-Fi", Icons.Default.Wifi, isEnabled = true),
@@ -97,8 +123,10 @@ class ShadeViewModel {
             QuickSettingTileState("Airplane Mode", Icons.Default.AirplanemodeActive),
         )
     )
+    /** The publicly exposed, read-only state for the Quick Settings tiles. */
     val quickSettings = _quickSettings.asStateFlow()
 
+    // Private mutable state for the notifications.
     private val _notifications = MutableStateFlow(
         listOf(
             Notification(1, "Gmail", "New Message", "Check out the new features..."),
@@ -106,8 +134,10 @@ class ShadeViewModel {
             Notification(3, "Android Studio", "Build Successful", "app:assembleDebug finished."),
         )
     )
+    /** The publicly exposed, read-only state for the notifications. */
     val notifications = _notifications.asStateFlow()
 
+    /** Toggles the enabled state of a specific Quick Setting tile. */
     fun toggleQuickSetting(settingName: String) {
         _quickSettings.value = _quickSettings.value.map {
             if (it.name == settingName) {
@@ -118,12 +148,15 @@ class ShadeViewModel {
         }
     }
 
+    /** Dismisses a notification by its ID. */
     fun dismissNotification(notificationId: Int) {
         _notifications.value = _notifications.value.filterNot { it.id == notificationId }
     }
 }
 
-// --- ViewModel for the Recents Screen ---
+/**
+ * A state-holder (ViewModel) for the Recents (app switcher) screen.
+ */
 class RecentsViewModel {
     private val _tasks = MutableStateFlow(
         listOf(
@@ -136,12 +169,15 @@ class RecentsViewModel {
     )
     val tasks = _tasks.asStateFlow()
 
+    /** Dismisses a task from the Recents screen by its ID. */
     fun dismissTask(taskId: Int) {
         _tasks.value = _tasks.value.filterNot { it.id == taskId }
     }
 }
 
-// --- ViewModel for the Volume Dialog ---
+/**
+ * A state-holder (ViewModel) for the Volume Dialog.
+ */
 class VolumeViewModel {
     private val _volumeLevel = MutableStateFlow(0.5f)
     val volumeLevel = _volumeLevel.asStateFlow()
@@ -151,20 +187,29 @@ class VolumeViewModel {
     }
 }
 
-// --- ViewModel for the Keyguard ---
+/**
+ * A state-holder (ViewModel) for the Keyguard (lock screen).
+ */
 class KeyguardViewModel {
     private val _isLocked = MutableStateFlow(true)
     val isLocked = _isLocked.asStateFlow()
+
     fun lock() { _isLocked.value = true }
     fun unlock() { _isLocked.value = false }
 }
 
-// --- MAIN ACTIVITY ---
+/**
+ * The main and only Activity for this application.
+ * It sets up the edge-to-edge display and hosts the root [SystemUIComposeDemo] composable.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // This enables drawing under the system bars (status and navigation).
         enableEdgeToEdge()
+        // This is the legacy way to do it, but still important for full control.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
         setContent {
             SystemUIComposeDemoTheme {
                 SystemUIComposeDemo()
@@ -173,21 +218,33 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// --- ROOT COMPOSABLE: THE CORE OF THE SYSTEM UI ---
+/**
+ * The root composable that orchestrates the entire System UI.
+ *
+ * This function is responsible for:
+ * 1.  **State Ownership:** Creating and remembering all the ViewModels (state-holders).
+ * 2.  **State Collection:** Collecting state from the ViewModels as Compose `State` objects.
+ * 3.  **Layout:** Defining the root layout (`BoxWithConstraints`) and the layering of all UI components.
+ * 4.  **Gesture Handling:** Managing the primary drag gestures for the shade and lock screen.
+ */
 @Composable
 fun SystemUIComposeDemo() {
-    // Centralized state management.
+    // 1. STATE OWNERSHIP: Instantiate all ViewModels. `remember` ensures they survive recomposition.
     val keyguardVM = remember { KeyguardViewModel() }
     val shadeVM = remember { ShadeViewModel() }
     val recentsVM = remember { RecentsViewModel() }
     val volumeVM = remember { VolumeViewModel() }
+
+    // 2. STATE COLLECTION: Collect state from Flows and convert to Compose State.
+    // The `by` keyword delegates to the State's value, so we can use `isLocked` directly.
     val isLocked by keyguardVM.isLocked.collectAsState()
     val quickSettings by shadeVM.quickSettings.collectAsState()
     val notifications by shadeVM.notifications.collectAsState()
     val tasks by recentsVM.tasks.collectAsState()
     val volumeLevel by volumeVM.volumeLevel.collectAsState()
 
-    // Transient UI state for gestures and animations.
+    // Transient UI state that is owned by this composable.
+    // This state is not complex enough to require a full ViewModel.
     var expansion by remember { mutableFloatStateOf(0f) }
     val animatedExpansion by animateFloatAsState(
         targetValue = if (isLocked) 0f else expansion, // Shade must be closed when locked.
@@ -195,7 +252,7 @@ fun SystemUIComposeDemo() {
         label = "ShadeExpansion"
     )
 
-    // State for various dialogs and overlays.
+    // Simple boolean flags to control the visibility of various dialogs and overlays.
     var showVolume by remember { mutableStateOf(false) }
     var showPower by remember { mutableStateOf(false) }
     var showRecents by remember { mutableStateOf(false) }
@@ -203,7 +260,7 @@ fun SystemUIComposeDemo() {
     val showSplit = splitScreenTask != null
     var headsUp by remember { mutableStateOf<String?>(null) }
 
-    // A side-effect to manage the lifecycle of a heads-up notification.
+    // A side-effect to automatically dismiss the heads-up notification after a delay.
     LaunchedEffect(headsUp) {
         if (headsUp != null) {
             delay(3000)
@@ -211,28 +268,33 @@ fun SystemUIComposeDemo() {
         }
     }
 
-    // A System UI is a stack of layers. `BoxWithConstraints` is ideal for this.
+    // 3. LAYOUT: `BoxWithConstraints` is the root layout, perfect for a stack of UI layers.
+    // It also provides the screen constraints, which are used for the shade expansion calculation.
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(isLocked) {
+            // 4. GESTURE HANDLING: A single, centralized gesture detector.
+            .pointerInput(isLocked) { // The key `isLocked` restarts the gesture detector when the lock state changes.
                 if (!isLocked) {
                     // When unlocked, downward drag expands the notification shade.
                     detectVerticalDragGestures { _, dragAmount ->
+                        // Calculate the drag delta as a percentage of the screen height.
                         val delta = dragAmount / size.height
+                        // Update the expansion state, coercing it between 0% and 100%.
                         expansion = (expansion - delta).coerceIn(0f, 1f)
                     }
                 } else {
                     // When locked, a significant swipe up unlocks the device.
                     detectVerticalDragGestures { _, dragAmount ->
-                        if (dragAmount < -200) { // Threshold to prevent accidental unlocks.
+                        if (dragAmount < -200) { // Use a threshold to prevent accidental unlocks.
                             keyguardVM.unlock()
                         }
                     }
                 }
             }
     ) {
+        // The UI layers are extracted into a private function to keep this one clean.
         SystemUiLayers(
             isLocked = isLocked,
             expansion = expansion,
@@ -261,6 +323,10 @@ fun SystemUIComposeDemo() {
     }
 }
 
+/**
+ * A private composable that holds all the individual UI layers.
+ * This helps to keep the main [SystemUIComposeDemo] function clean and focused on state management.
+ */
 @Composable
 private fun SystemUiLayers(
     isLocked: Boolean,
@@ -326,7 +392,7 @@ private fun SystemUiLayers(
 
     // Layer 5: Navigation Bar (always at the bottom)
     NavigationBar(
-        onBack = { /* Handled by SystemUIComposeDemo */ },
+        onBack = { /* Back press logic is handled in the root composable for now */ },
         onHome = { keyguardVM.lock() }, // Demo: Home button locks the device.
         onRecents = { onShowRecentsChange(true) },
         onShowPower = { onShowPowerChange(true) },
@@ -344,6 +410,7 @@ private fun SystemUiLayers(
 
 // --- UI COMPONENTS ---
 
+/** A placeholder for the Home Screen content. */
 @Composable
 fun HomeScreenContent(onTriggerHeadsUp: () -> Unit) {
     Box(
@@ -359,12 +426,13 @@ fun HomeScreenContent(onTriggerHeadsUp: () -> Unit) {
     }
 }
 
+/** The status bar, which displays the time and system icons. */
 @Composable
 fun StatusBar() {
     Row(
         Modifier
             .fillMaxWidth()
-            .statusBarsPadding() // Handles insets automatically.
+            .statusBarsPadding() // Automatically adds padding to avoid the system status bar.
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text("12:00 PM", color = Color.White, fontWeight = FontWeight.Medium)
@@ -373,6 +441,7 @@ fun StatusBar() {
     }
 }
 
+/** The Keyguard (lock screen) UI. */
 @Composable
 fun KeyguardScreen(onBiometric: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Black.copy(alpha = 0.8f)) {
@@ -387,6 +456,11 @@ fun KeyguardScreen(onBiometric: () -> Unit) {
     }
 }
 
+/**
+ * The main panel for the notification shade.
+ * Its height is dynamically controlled by the [expansion] parameter.
+ * The content inside is animated to appear as the shade expands.
+ */
 @Composable
 fun ShadePanel(
     expansion: Float,
@@ -396,20 +470,20 @@ fun ShadePanel(
     onToggleQuickSetting: (String) -> Unit,
     onDismissNotification: (Int) -> Unit
 ) {
-    if (expansion > 0f) { // Performance optimization.
+    if (expansion > 0f) { // Performance optimization: Only compose if visible.
         Column(
             Modifier
                 .fillMaxWidth()
-                .height(maxHeight * expansion) // Height is dynamically controlled by the gesture.
+                .height(maxHeight * expansion) // The height is a direct function of the gesture expansion state.
                 .background(Color.DarkGray.copy(alpha = 0.9f))
         ) {
-            // Animate the content to fade/slide in
+            // Animate the content to fade and slide in as the shade is pulled down.
             AnimatedVisibility(
-                visible = expansion > 0.5, // Only show when expanded enough
+                visible = expansion > 0.5, // Only show when expanded enough to be useful.
                 enter = fadeIn(animationSpec = spring(stiffness = 300f)) + slideInVertically(animationSpec = spring(stiffness = 300f)),
                 exit = fadeOut(animationSpec = spring(stiffness = 300f)) + slideOutVertically(animationSpec = spring(stiffness = 300f))
             ) {
-                Column(modifier = Modifier.padding(top = 40.dp)) { // Padding for status bar
+                Column(modifier = Modifier.padding(top = 40.dp)) { // Padding for the status bar
                     QuickSettingsGrid(quickSettings, onToggle = onToggleQuickSetting)
                     Spacer(Modifier.height(16.dp))
                     Text(
@@ -425,6 +499,7 @@ fun ShadePanel(
     }
 }
 
+/** A grid of Quick Settings tiles. */
 @Composable
 fun QuickSettingsGrid(
     settings: List<QuickSettingTileState>,
@@ -456,13 +531,14 @@ fun QuickSettingsGrid(
     }
 }
 
+/** A scrollable list of notifications. */
 @Composable
 fun NotificationList(
     notifications: List<Notification>,
     onDismissNotification: (Int) -> Unit
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(bottom = 100.dp) // Avoid overlap with nav bar
+        contentPadding = PaddingValues(bottom = 100.dp) // Avoids overlap with the navigation bar.
     ) {
         items(notifications, key = { it.id }) { notification ->
             NotificationCard(notification, onDismiss = { onDismissNotification(notification.id) })
@@ -470,8 +546,13 @@ fun NotificationList(
     }
 }
 
+/**
+ * A single notification card with a swipe-to-dismiss gesture.
+ * This demonstrates an advanced, physics-based animation for the swipe gesture.
+ */
 @Composable
 fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
+    // `Animatable` is a low-level animation API that provides more control than `animate*AsState`.
     val offsetX = remember { Animatable(0f) }
 
     Box(
@@ -480,16 +561,17 @@ fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
                 coroutineScope {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            launch {
-                                offsetX.snapTo(offsetX.value + dragAmount)
-                            }
+                            change.consume() // Consume the event to prevent other gestures from firing.
+                            // `snapTo` provides a 1-to-1 mapping of finger movement to the UI element.
+                            launch { offsetX.snapTo(offsetX.value + dragAmount) }
                         },
                         onDragEnd = {
                             launch {
-                                if (abs(offsetX.value) > 300) { // arbitrary threshold
+                                // If the swipe distance exceeds the threshold, dismiss the card.
+                                if (abs(offsetX.value) > 300) {
                                     onDismiss()
                                 } else {
+                                    // Otherwise, animate the card back to its original position with a springy effect.
                                     offsetX.animateTo(0f, spring())
                                 }
                             }
@@ -522,6 +604,9 @@ fun NotificationCard(notification: Notification, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * The Recents screen, which displays a horizontal, pager-like list of recent tasks.
+ */
 @Composable
 fun RecentsScreen(
     tasks: List<Task>,
@@ -530,6 +615,7 @@ fun RecentsScreen(
     onSplit: (Task) -> Unit
 ) {
     val lazyListState = rememberLazyListState()
+    // This is the key to the pager-like effect. It makes the list snap to the nearest item.
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = lazyListState)
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f))) {
@@ -537,7 +623,7 @@ fun RecentsScreen(
             modifier = Modifier.fillMaxSize(),
             state = lazyListState,
             flingBehavior = flingBehavior,
-            contentPadding = PaddingValues(horizontal = 40.dp), // To have cards centered
+            contentPadding = PaddingValues(horizontal = 40.dp), // Allows the first and last items to be centered.
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -547,8 +633,8 @@ fun RecentsScreen(
                     onDismiss = { onDismissTask(task.id) },
                     onSplit = { onSplit(task) },
                     modifier = Modifier
-                        .fillParentMaxHeight(0.7f) // Make cards tall
-                        .aspectRatio(9f / 16f) // Typical phone aspect ratio
+                        .fillParentMaxHeight(0.7f) // Make cards tall.
+                        .aspectRatio(9f / 16f) // Typical phone aspect ratio.
                 )
             }
         }
@@ -564,6 +650,7 @@ fun RecentsScreen(
     }
 }
 
+/** A single card representing a recent task, with a swipe-up-to-dismiss gesture. */
 @Composable
 fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: Modifier = Modifier) {
     val offsetY = remember { Animatable(0f) }
@@ -576,9 +663,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: M
                     detectVerticalDragGestures {
                         change, dragAmount ->
                         change.consume()
-                        launch {
-                            offsetY.snapTo(offsetY.value + dragAmount)
-                        }
+                        launch { offsetY.snapTo(offsetY.value + dragAmount) }
                         // Swipe up to dismiss
                         if (dragAmount < -150) { // Swipe threshold
                             onDismiss()
@@ -590,7 +675,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: M
         color = task.color
     ) {
         Column {
-            // Header
+            // Header with app icon and split screen button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -598,7 +683,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: M
                     .padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White)
+                Icon(Icons.Default.Adb, contentDescription = "App Icon", tint = Color.White) // Placeholder
                 Spacer(Modifier.width(8.dp))
                 Text(task.name, color = Color.White, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
@@ -606,7 +691,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: M
                     Icon(Icons.Default.VerticalSplit, contentDescription = "Split Screen", tint = Color.White)
                 }
             }
-            // Fake app content
+            // Placeholder for the app's content
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -619,8 +704,7 @@ fun TaskCard(task: Task, onDismiss: () -> Unit, onSplit: () -> Unit, modifier: M
     }
 }
 
-
-
+/** The navigation bar, with buttons for Back, Home, and Recents. */
 @Composable
 fun NavigationBar(
     onBack: () -> Unit,
@@ -634,7 +718,7 @@ fun NavigationBar(
             Modifier
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.5f))
-                .navigationBarsPadding() // Handles insets automatically.
+                .navigationBarsPadding() // Automatically adds padding to avoid the system navigation bar.
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
@@ -649,6 +733,7 @@ fun NavigationBar(
 
 // --- Implemented Dialogs & Overlays ---
 
+/** A transient, heads-up notification that appears at the top of the screen. */
 @Composable
 fun HeadsUpNotification(text: String) {
     Box(modifier = Modifier.fillMaxWidth().statusBarsPadding(), contentAlignment = Alignment.TopCenter) {
@@ -662,6 +747,7 @@ fun HeadsUpNotification(text: String) {
     }
 }
 
+/** A custom volume dialog with a vertical slider. */
 @Composable
 fun VolumeDialog(volumeLevel: Float, onVolumeChange: (Float) -> Unit, onDismiss: () -> Unit) {
     Box(
@@ -680,6 +766,7 @@ fun VolumeDialog(volumeLevel: Float, onVolumeChange: (Float) -> Unit, onDismiss:
             color = Color(0xFF333333)
         ) {
             Box(contentAlignment = Alignment.Center) {
+                // This is a classic technique for creating a vertical slider in Compose.
                 Slider(
                     value = volumeLevel,
                     onValueChange = onVolumeChange,
@@ -694,6 +781,7 @@ fun VolumeDialog(volumeLevel: Float, onVolumeChange: (Float) -> Unit, onDismiss:
     }
 }
 
+/** A custom power menu with a long-press "easter egg". */
 @Composable
 fun PowerMenu(onDismiss: () -> Unit) {
     var showSafeMode by remember { mutableStateOf(false) }
@@ -704,11 +792,12 @@ fun PowerMenu(onDismiss: () -> Unit) {
             .background(Color.Black.copy(alpha = 0.8f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null // No ripple on the background
+                indication = null // No ripple on the background click.
             ) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // The Box wrapper is used to apply the long-press listener to the Button.
             Box(
                 modifier = Modifier.pointerInput(Unit) {
                     detectTapGestures(
@@ -729,6 +818,7 @@ fun PowerMenu(onDismiss: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
+            // This hidden option is revealed on long-press.
             AnimatedVisibility(visible = showSafeMode) {
                 Button(onClick = { /* TODO: Implement Safe Mode Reboot */ }) {
                     Text("Reboot to Safe Mode", fontSize = 18.sp)
@@ -744,7 +834,7 @@ fun PowerMenu(onDismiss: () -> Unit) {
     }
 }
 
-
+/** A placeholder for the split-screen UI. */
 @Composable
 fun SplitScreenOverlay(task: Task?, onDismiss: () -> Unit) {
     if (task == null) return

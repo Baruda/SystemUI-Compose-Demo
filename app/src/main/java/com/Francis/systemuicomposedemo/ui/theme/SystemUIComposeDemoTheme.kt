@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+// These are the default color palettes provided by the Material 3 template.
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
@@ -27,21 +28,37 @@ private val LightColorScheme = lightColorScheme(
     tertiary = Pink40
 )
 
+/**
+ * The main theme for the application.
+ *
+ * This composable sets up the Material 3 theme, with support for:
+ * - Light and Dark color schemes.
+ * - Dynamic Color (on Android 12+), which uses colors from the user's wallpaper.
+ * - System bar color customization.
+ *
+ * @param darkTheme Whether the theme should be dark or light. Defaults to the system setting.
+ * @param dynamicColor Whether to use Monet-based dynamic coloring. Defaults to true.
+ * @param content The root composable content to which the theme will be applied.
+ */
 @Composable
 fun SystemUIComposeDemoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
+    // Dynamic color is available on Android 12+.
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        // Use dynamic colors if available and enabled.
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        // Otherwise, fall back to the default dark/light color schemes.
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
+
+    // This SideEffect changes the color of the system status bar to match the theme.
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
